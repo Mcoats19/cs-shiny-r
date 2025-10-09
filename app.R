@@ -1,11 +1,18 @@
+# -----------------------------
+# Posit CS Dashboard - app.R
+# -----------------------------
+
 # Load packages used by the app
 library(shiny)
 library(bslib)
 library(thematic)
-library(tidyverse)
-library(gitlink)
+library(tidyverse)   # dplyr, ggplot2, tidyr, etc.
+library(readr)
+library(lubridate)
+library(scales)
 
-source("setup.R")
+# Stop using the demo data
+# source("setup.R")
 
 # Set the default theme for ggplot2 plots
 ggplot2::theme_set(ggplot2::theme_minimal())
@@ -13,154 +20,167 @@ ggplot2::theme_set(ggplot2::theme_minimal())
 # Apply the CSS used by the Shiny app to the ggplot2 plots
 thematic_shiny()
 
+# -----------------------------
+# Load your CSV
+# -----------------------------
+accounts <- readr::read_csv("data/accounts.csv", show_col_types = FALSE) |>
+  mutate(
+    renewal_date = as.Date(renewal_date),
+    quarter = if_else(!is.na(renewal_date),
+                      paste0(lubridate::year(renewal_date), "-Q", lubridate::quarter(renewal_date)),
+                      NA_character_),
+    risk = factor(as.character(risk),
+                  levels = c("None","Low","Medium","High","Critical"),
+                  ordered = TRUE)
+  )
 
-# Define the Shiny UI layout
+# -----------------------------
+# UI
+# -----------------------------
 ui <- page_sidebar(
 
-  # Add github link (removed for connect cloud)
- # ribbon_css("https://github.com/rstudio/demo-co/tree/main/evals-analysis-app"),
-
   # Set CSS theme
-theme = bs_theme(
-  bootswatch = "darkly",
-  base_font   = font_google("Open Sans"),
-  heading_font= font_google("Open Sans"),
-  bg = "#222222",
-  fg = "#86C7ED",
-  success = "#86C7ED"
-),
+  theme = bs_theme(
+    bootswatch = "darkly",
+    base_font    = font_google("Open Sans"),
+    heading_font = font_google("Open Sans"),
+    bg = "#222222",
+    fg = "#86C7ED",
+    success = "#86C7ED"
+  ),
 
-  # Add title
-  title = "Posit Customer Success, FSI Martineja Coats BoB
-",
+  # Title
+  title = "Posit Customer Success, FSI Martineja Coats BoB",
 
-  # Add sidebar elements
-  sidebar = sidebar(title = "Select a segment of data to view",
-                    class ="bg-secondary",
-                    selectInput("industry", "Account Executive", choices = industries, selected = "", multiple  = TRUE),
-                    selectInput("propensity", "Risk Level", choices = propensities, selected = "", multiple  = TRUE),
-                    selectInput("contract", "Renewal Quarter", choices = contracts, selected = "", multiple  = TRUE),
-                    "This Customer Success Dashboard Provides High-Level Account Overviews for CSM BoB",
-                    tags$img(src = "logo.png", width = "100%", height = "auto")),
+  # Sidebar (labels already updated)
+  sidebar = sidebar(
+    title = "Select a segment of data to view",
+    class = "bg-secondary",
 
-  # Layout non-sidebar elements
-  layout_columns(card(card_header("Renewal ARR by Quarter"),
-                      plotOutput("line")),
-                 card(card_header("ARR Risk by Quarter"),
-                      plotOutput("bar")),
-                 value_box(title = "Total # Accounts",
-                           value = textOutput("recommended_eval"),
-                           theme_color = "secondary"),
-                 value_box(title = "Total ARR $",
-                           value = textOutput("number_of_customers"),
-                           theme_color = "secondary"),
-                 value_box(title = "At Risk ARR $",
-                           value = textOutput("High Risk and Above $"),
-                           theme_color = "secondary"),
-                 card(card_header("Detailed Account View"),
-                      tableOutput("table")),
-                 col_widths = c(8, 4, 4, 4, 4, 12),
-                 row_heights = c(4, 1.5, 3))
+    # NOTE: choices are filled dynamically in server()
+    selectInput("industry",   "Account Executive", choices = NULL, selected = "", multiple = TRUE),
+    selectInput("propensity", "Risk Level",
+                choices = c("None","Low","Medium","High","Critical"),
+                selected = "", multiple = TRUE),
+    selectInput("contract",   "Renewal Quarter", choices = NULL, selected = "", multiple = TRUE),
+
+    "This Customer Success Dashboard Provides High-Level Account Overviews for CSM BoB",
+    tags$img(src = "logo.png", width = "100%", height = "auto")
+  ),
+
+  # Body layout (keeps your original IDs)
+  layout_columns(
+    card(card_header("Renewal ARR by Quarter"),
+         plotOutput("line")),
+    card(card_header("ARR Risk by Quarter"),
+         plotOutput("bar")),
+
+    value_box(title = "Total # Accounts",
+              value = textOutput("recommended_eval"),
+              theme_color = "secondary"),
+    value_box(title = "Total ARR $",
+              value = textOutput("number_of_customers"),
+              theme_color = "secondary"),
+    value_box(title = "At Risk ARR $",
+              value = textOutput("High Risk and Above $"),
+              theme_color = "secondary"),
+
+    card(card_header("Detailed Account View"),
+         tableOutput("table")),
+
+    col_widths = c(8, 4, 4, 4, 4, 12),
+    row_heights = c(4, 1.5, 3)
+  )
 )
 
-# Define the Shiny server function
-server <- function(input, output) {
+# -----------------------------
+# Server
+# -----------------------------
+server <- function(input, output, session) {
 
-  # Provide default values for industry, propensity, and contract selections
-  selected_industries <- reactive({
-    if (is.null(input$industry)) industries else input$industry
+  # Populate filter choices from data
+  observe({
+    updateSelectInput(session, "industry",
+      choices = sort(unique(accounts$ae)), selected = character(0))
+    updateSelectInput(session, "contract",
+      choices = sort(na.omit(unique(accounts$quarter))), selected = character(0))
   })
 
-  selected_propensities <- reactive({
-    if (is.null(input$propensity)) propensities else input$propensity
+  # Filtered dataset (drives all outputs)
+  filtered <- reactive({
+    df <- accounts
+    if (length(input$industry))   df <- df |> filter(ae %in% input$industry)
+    if (length(input$propensity)) df <- df |> filter(as.character(risk) %in% input$propensity)
+    if (length(input$contract))   df <- df |> filter(quarter %in% input$contract)
+    df
   })
 
-  selected_contracts <- reactive({
-    if (is.null(input$contract)) contracts else input$contract
+  # KPIs (re-using your existing output IDs)
+  # Total # Accounts
+  output$recommended_eval <- renderText(
+    scales::comma(dplyr::n_distinct(filtered()$account))
+  )
+
+  # Total ARR $
+  output$number_of_customers <- renderText(
+    scales::dollar(sum(filtered()$arr, na.rm = TRUE))
+  )
+
+  # At Risk ARR $ (Medium and above)
+  output$`High Risk and Above $` <- renderText(
+    scales::dollar(sum(filtered()$arr[filtered()$risk %in% c("Medium","High","Critical")], na.rm = TRUE))
+  )
+
+  # Line: Renewal ARR by Quarter (Total vs At-Risk)
+  line_df <- reactive({
+    filtered() |>
+      group_by(quarter) |>
+      summarise(
+        `Total ARR`   = sum(arr, na.rm = TRUE),
+        `At-Risk ARR` = sum(arr[risk %in% c("Medium","High","Critical")], na.rm = TRUE),
+        .groups = "drop"
+      ) |>
+      tidyr::pivot_longer(c(`Total ARR`, `At-Risk ARR`),
+                          names_to = "metric", values_to = "value") |>
+      arrange(quarter)
   })
 
-  # Filter data against selections
-  filtered_expansions <- reactive({
-    expansions |>
-      filter(industry %in% selected_industries(),
-             propensity %in% selected_propensities(),
-             contract %in% selected_contracts())
-  })
-
-  # Compute conversions by month
-  conversions <- reactive({
-    filtered_expansions() |>
-      mutate(date = floor_date(date, unit = "month")) |>
-      group_by(date, evaluation) |>
-      summarize(n = sum(outcome == "Won")) |>
-      ungroup()
-  })
-
-  # Retrieve conversion rates for selected groups
-  groups <- reactive({
-    expansion_groups |>
-      filter(industry %in% selected_industries(),
-             propensity %in% selected_propensities(),
-             contract %in% selected_contracts())
-  })
-
-  # Render text for recommended trial
-  output$recommended_eval <- renderText({
-    recommendation <-
-      filtered_expansions() |>
-      group_by(evaluation) |>
-      summarise(rate = mean(outcome == "Won")) |>
-      filter(rate == max(rate)) |>
-      pull(evaluation)
-
-    as.character(recommendation[1])
-  })
-
-  # Render text for number of customers
-  output$number_of_customers <- renderText({
-    sum(filtered_expansions()$outcome == "Won") |>
-      format(big.mark = ",")
-  })
-
-  # Render text for average spend
-  output$average_spend <- renderText({
-      x <-
-        filtered_expansions() |>
-        filter(outcome == "Won") |>
-        summarise(spend = round(mean(amount))) |>
-        pull(spend)
-
-      str_glue("${x}")
-  })
-
-  # Render line plot for conversions over time
   output$line <- renderPlot({
-    ggplot(conversions(), aes(x = date, y = n, color = evaluation)) +
-      geom_line() +
-      theme(axis.title = element_blank()) +
-      labs(color = "Trial Type")
+    ggplot(line_df(), aes(x = quarter, y = value, color = metric, group = metric)) +
+      geom_line() + geom_point() +
+      scale_y_continuous(labels = scales::dollar) +
+      labs(x = NULL, y = "ARR $", color = NULL) +
+      theme_minimal(base_size = 12)
   })
 
-  # Render bar plot for conversion rates by subgroup
+  # Bar: ARR Risk by Quarter (stacked buckets)
+  bar_df <- reactive({
+    filtered() |>
+      mutate(bucket = case_when(
+        risk == "None" ~ "None",
+        risk %in% c("Low","Medium") ~ "Low/Medium",
+        TRUE ~ "High/Critical"
+      )) |>
+      group_by(quarter, bucket) |>
+      summarise(arr = sum(arr, na.rm = TRUE), .groups = "drop")
+  })
+
   output$bar <- renderPlot({
-    groups() |>
-      group_by(evaluation) |>
-      summarise(rate = round(sum(n * success_rate) / sum(n), 2)) |>
-      ggplot(aes(x = evaluation, y = rate, fill = evaluation)) +
-        geom_col() +
-        guides(fill = "none") +
-        theme(axis.title = element_blank()) +
-        scale_y_continuous(limits = c(0, 100))
+    ggplot(bar_df(), aes(x = quarter, y = arr, fill = bucket)) +
+      geom_col() +
+      scale_y_continuous(labels = scales::dollar) +
+      labs(x = NULL, y = "ARR $", fill = "Risk") +
+      theme_minimal(base_size = 12)
   })
 
-  # Render table for conversion rates by subgroup
+  # Detailed Account View (shows all rows/cols from filtered data)
   output$table <- renderTable({
-    groups() |>
-      select(industry, propensity, contract, evaluation, success_rate) |>
-      pivot_wider(names_from = evaluation, values_from = success_rate)
-  },
-  digits = 0)
+    filtered() |> arrange(desc(arr))
+  }, digits = 0)
 }
 
-# Create the Shiny app
+# -----------------------------
+# Run app
+# -----------------------------
 shinyApp(ui = ui, server = server)
+
