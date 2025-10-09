@@ -27,7 +27,8 @@ ui <- page_sidebar(
                    success ="#86C7ED"),
 
   # Add title
-  title = "Effectiveness of DemoCo App Free Trial by Customer Segment",
+  title = "Posit Customer Success, FSI Martineja Coats BoB
+",
 
   # Add sidebar elements
   sidebar = sidebar(title = "Select a segment of data to view",
