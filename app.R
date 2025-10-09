@@ -21,10 +21,14 @@ ui <- page_sidebar(
  # ribbon_css("https://github.com/rstudio/demo-co/tree/main/evals-analysis-app"),
 
   # Set CSS theme
-  theme = bs_theme(bootswatch = "darkly",
-                   bg = "#222222",
-                   fg = "#86C7ED",
-                   success ="#86C7ED"),
+theme = bs_theme(
+  bootswatch = "darkly",
+  base_font   = font_google("Open Sans"),
+  heading_font= font_google("Open Sans"),
+  bg = "#222222",
+  fg = "#86C7ED",
+  success = "#86C7ED"
+),
 
   # Add title
   title = "Posit Customer Success, FSI Martineja Coats BoB
