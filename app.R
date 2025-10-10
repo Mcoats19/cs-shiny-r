@@ -145,33 +145,45 @@ server <- function(input, output, session) {
       arrange(quarter)
   })
 
-  output$line <- renderPlot({
-    ggplot(line_df(), aes(x = quarter, y = value, color = metric, group = metric)) +
-      geom_line() + geom_point() +
-      scale_y_continuous(labels = scales::dollar) +
-      labs(x = NULL, y = "ARR $", color = NULL) +
-      theme_minimal(base_size = 12)
-  })
+# --- Line: Renewal ARR by Quarter (clean grid) ---
+output$line <- renderPlot({
+  ggplot(line_df(), aes(x = quarter, y = value, color = metric, group = metric)) +
+    geom_line(linewidth = 1) +
+    geom_point(size = 2) +
+    scale_y_continuous(
+      labels = scales::dollar,
+      breaks = scales::breaks_pretty(5)   # ~5 horizontal grid lines
+    ) +
+    # show fewer x labels; dodge if crowded
+    scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+    labs(x = NULL, y = "ARR $", color = NULL, title = NULL) +
+    theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.minor = element_blank(),     # remove minor grid
+      panel.grid.major.x = element_blank(),   # no vertical grid lines
+      axis.ticks.x = element_blank(),
+      plot.title = element_text(face = "bold")
+    )
+})
 
-  # Bar: ARR Risk by Quarter (stacked buckets)
-  bar_df <- reactive({
-    filtered() |>
-      mutate(bucket = case_when(
-        risk == "None" ~ "None",
-        risk %in% c("Low","Medium") ~ "Low/Medium",
-        TRUE ~ "High/Critical"
-      )) |>
-      group_by(quarter, bucket) |>
-      summarise(arr = sum(arr, na.rm = TRUE), .groups = "drop")
-  })
+# --- Bar: ARR Risk by Quarter (clean grid) ---
+output$bar <- renderPlot({
+  ggplot(bar_df(), aes(x = quarter, y = arr, fill = bucket)) +
+    geom_col() +
+    scale_y_continuous(
+      labels = scales::dollar,
+      breaks = scales::breaks_pretty(5)       # ~5 horizontal grid lines
+    ) +
+    scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+    labs(x = NULL, y = "ARR $", fill = "Risk", title = NULL) +
+    theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank(),
+      axis.ticks.x = element_blank()
+    )
+})
 
-  output$bar <- renderPlot({
-    ggplot(bar_df(), aes(x = quarter, y = arr, fill = bucket)) +
-      geom_col() +
-      scale_y_continuous(labels = scales::dollar) +
-      labs(x = NULL, y = "ARR $", fill = "Risk") +
-      theme_minimal(base_size = 12)
-  })
 
   # Detailed Account View (shows all rows/cols from filtered data)
   output$table <- renderTable({
