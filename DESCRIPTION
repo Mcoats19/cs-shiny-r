@@ -1,0 +1,19 @@
+Package: cs-shiny-r
+Type: Shiny
+Title: CS Dashboard
+Version: 0.0.1
+Description: Posit CS Dashboard (FSI BoB)
+Authors@R: person("Martineja", "Coats", role = c("aut","cre"))
+Depends: R (>= 4.1)
+Encoding: UTF-8
+LazyData: true
+Imports:
+    shiny,
+    bslib,
+    thematic,
+    tidyverse,
+    readr,
+    lubridate,
+    scales,
+    DT,
+    htmltools
