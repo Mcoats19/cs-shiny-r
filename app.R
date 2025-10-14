@@ -239,29 +239,30 @@ observeEvent(input$account_clicked, {
   req(input$account_clicked)
   acct <- input$account_clicked
 
-  row <- filtered() |> filter(account == acct)
+  row <- filtered() |> dplyr::filter(account == acct)
   req(nrow(row) == 1)
 
   # build a neat key/value table
   kv <- lapply(names(row), function(nm) {
     val <- as.character(row[[nm]][1])
-    tags<tr>(
-      tags<th(style = "white-space: nowrap; padding-right:12px;"), nm),
-      tags<td(style = "word-break: break-word;"), val)
+    htmltools::tags$tr(
+      htmltools::tags$th(style = "white-space: nowrap; padding-right:12px;", nm),
+      htmltools::tags$td(style = "word-break: break-word;", val)
     )
   })
 
-  showModal(modalDialog(
+  shiny::showModal(shiny::modalDialog(
     title = paste("Account details —", acct),
     size = "l",
     easyClose = TRUE,
-    footer = modalButton("Close"),
-    tags$div(
+    footer = shiny::modalButton("Close"),
+    htmltools::tags$div(
       style = "max-height:60vh; overflow:auto;",
-      tags$table(class = "table table-sm table-striped", kv)
+      htmltools::tags$table(class = "table table-sm table-striped", kv)
     )
   ))
 })
+
 
 # -----------------------------
 # Run app
