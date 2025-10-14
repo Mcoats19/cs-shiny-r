@@ -166,14 +166,28 @@ output$line <- renderPlot({
     )
 })
 
-# --- Bar: ARR Risk by Quarter (clean grid) ---
+# --- Bar: ARR Risk by Quarter (self-contained) ---
 output$bar <- renderPlot({
-  ggplot(bar_df(), aes(x = quarter, y = arr, fill = bucket)) +
-    geom_col() +
-    scale_y_continuous(
-      labels = scales::dollar,
-      breaks = scales::breaks_pretty(5)       # ~5 horizontal grid lines
-    ) +
+  df <- filtered() %>%
+    filter(!is.na(quarter)) %>%
+    mutate(
+      bucket = factor(
+        as.character(risk),
+        levels = c("None","Low","Medium","High","Critical"),
+        ordered = TRUE
+      )
+    ) %>%
+    group_by(quarter, bucket) %>%
+    summarise(arr = sum(arr, na.rm = TRUE), .groups = "drop") %>%
+    arrange(quarter, bucket) %>%
+    mutate(quarter = factor(quarter, levels = sort(unique(quarter))))
+
+  validate(need(nrow(df) > 0, "No data for current filters"))
+
+  ggplot(df, aes(x = quarter, y = arr, fill = bucket)) +
+    geom_col() +  # change to geom_col(position = "dodge") for side-by-side bars
+    scale_y_continuous(labels = scales::dollar,
+                       breaks = scales::breaks_pretty(5)) +
     scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
     labs(x = NULL, y = "ARR $", fill = "Risk", title = NULL) +
     theme_minimal(base_size = 12) +
