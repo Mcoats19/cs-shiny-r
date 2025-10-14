@@ -195,4 +195,3 @@ output$bar <- renderPlot({
 # Run app
 # -----------------------------
 shinyApp(ui = ui, server = server)
-
