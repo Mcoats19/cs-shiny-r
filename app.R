@@ -261,7 +261,7 @@ observeEvent(input$account_clicked, {
       htmltools::tags$table(class = "table table-sm table-striped", kv)
     )
   ))
-})
+}
 
 
 # -----------------------------
