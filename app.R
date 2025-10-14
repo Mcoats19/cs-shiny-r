@@ -10,6 +10,8 @@ library(tidyverse)   # dplyr, ggplot2, tidyr, etc.
 library(readr)
 library(lubridate)
 library(scales)
+library(DT)
+library(htmltools)
 
 # Stop using the demo data
 # source("setup.R")
@@ -85,8 +87,8 @@ ui <- page_sidebar(
               value = textOutput("High Risk and Above $"),
               theme_color = "secondary"),
 
-    card(card_header("Detailed Account View"),
-         tableOutput("table")),
+card(card_header("Detailed Account View"),
+     DTOutput("table")),
 
     col_widths = c(8, 4, 4, 4, 4, 12),
     row_heights = c(4, 1.5, 3)
@@ -199,11 +201,67 @@ output$bar <- renderPlot({
 })
 
 
-  # Detailed Account View (shows all rows/cols from filtered data)
-  output$table <- renderTable({
-    filtered() |> arrange(desc(arr))
-  }, digits = 0)
-}
+# Detailed Account View — clickable accounts that open a details modal
+output$table <- renderDT({
+  df <- filtered() |>
+    arrange(desc(arr))
+
+  # Make the Account column clickable; we keep a clean label but add a data-id
+  df <- df |>
+    mutate(
+      account_link = sprintf(
+        '<a href="#" class="acct-link" data-acct="%s">%s</a>',
+        htmlEscape(account), htmlEscape(account)
+      )
+    ) |>
+    # put the clickable account first, then the rest (drop original 'account' to avoid dup)
+    relocate(account_link, .before = everything()) |>
+    select(-account) |>
+    rename(account = account_link)
+
+  datatable(
+    df,
+    escape = FALSE,                # allow HTML for the link
+    rownames = FALSE,
+    options = list(pageLength = 10, scrollX = TRUE),
+    callback = JS(
+      "table.on('click', 'a.acct-link', function(e){",
+      "  e.preventDefault();",
+      "  var acct = this.getAttribute('data-acct');",
+      "  Shiny.setInputValue('account_clicked', acct, {priority: 'event'});",
+      "});"
+    )
+  )
+}, server = FALSE)
+
+# When a user clicks an account, show a modal with all fields/values for that row
+observeEvent(input$account_clicked, {
+  req(input$account_clicked)
+  acct <- input$account_clicked
+
+  row <- filtered() |> filter(account == acct)
+  req(nrow(row) == 1)
+
+  # build a neat key/value table
+  kv <- lapply(names(row), function(nm) {
+    val <- as.character(row[[nm]][1])
+    tags<tr>(
+      tags<th(style = "white-space: nowrap; padding-right:12px;"), nm),
+      tags<td(style = "word-break: break-word;"), val)
+    )
+  })
+
+  showModal(modalDialog(
+    title = paste("Account details —", acct),
+    size = "l",
+    easyClose = TRUE,
+    footer = modalButton("Close"),
+    tags$div(
+      style = "max-height:60vh; overflow:auto;",
+      tags$table(class = "table table-sm table-striped", kv)
+    )
+  ))
+})
 
 # -----------------------------
 # Run app
