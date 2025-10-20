@@ -1,5 +1,5 @@
-Package: cs-shiny-r
-Type: Shiny
+Package: csshinyr
+Type: Application
 Title: CS Dashboard
 Version: 0.0.1
 Description: Posit CS Dashboard (FSI BoB)
