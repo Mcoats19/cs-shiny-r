@@ -231,17 +231,17 @@ df <- df |>
   select(-account) |>
   rename(account = account_link)
 
-  # Drop redundant 'account_name' if present (avoid errors when it's not)
-df <- dplyr::select(df, -dplyr::any_of("account_name"))
+# Drop display-only columns (keep data in memory for other uses)
+df <- dplyr::select(df, -dplyr::any_of(c("account_name","amount_currency","amount")))
 
 
-# NEW: pretty display labels for the table headers
+# Pretty display labels for the table headers
 col_labs <- pretty_labels(names(df))
 
-DT::datatable(
+tbl <- DT::datatable(
   df,
   colnames = col_labs,
-  escape = FALSE,                # allow HTML for the link
+  escape = FALSE,
   rownames = FALSE,
   options = list(pageLength = 10, scrollX = TRUE),
   callback = JS(
@@ -253,7 +253,11 @@ DT::datatable(
   )
 )
 
-}, server = FALSE)
+# Format ARR as $12,345.67
+tbl <- DT::formatCurrency(tbl, columns = "arr", currency = "$", digits = 2, interval = 3, mark = ",", dec.mark = ".")
+
+tbl
+
 
 # When a user clicks an account, show a modal with all fields/values for that row
 observeEvent(input$account_clicked, {
