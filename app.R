@@ -293,7 +293,7 @@ observeEvent(input$account_clicked, {
     )
   ))
 })
-
+}
 
 
 # -----------------------------
