@@ -13,6 +13,16 @@ library(scales)
 library(DT)
 library(htmltools)
 
+# Pretty display labels for column headers (Title Case + keep acronyms)
+pretty_labels <- function(nms) {
+  lab <- gsub("_", " ", nms)
+  lab <- tools::toTitleCase(lab)
+  for (a in c("AE","ARR","ID","URL","API","KPI","ROI")) {
+    lab <- gsub(paste0("\\b", tools::toTitleCase(a), "\\b"), a, lab)
+  }
+  lab
+}
+
 # Stop using the demo data
 # source("setup.R")
 
@@ -206,32 +216,37 @@ output$table <- renderDT({
   df <- filtered() |>
     arrange(desc(arr))
 
-  # Make the Account column clickable; we keep a clean label but add a data-id
-  df <- df |>
-    mutate(
-      account_link = sprintf(
-        '<a href="#" class="acct-link" data-acct="%s">%s</a>',
-        htmlEscape(account), htmlEscape(account)
-      )
-    ) |>
-    # put the clickable account first, then the rest (drop original 'account' to avoid dup)
-    relocate(account_link, .before = everything()) |>
-    select(-account) |>
-    rename(account = account_link)
-
-  datatable(
-    df,
-    escape = FALSE,                # allow HTML for the link
-    rownames = FALSE,
-    options = list(pageLength = 10, scrollX = TRUE),
-    callback = JS(
-      "table.on('click', 'a.acct-link', function(e){",
-      "  e.preventDefault();",
-      "  var acct = this.getAttribute('data-acct');",
-      "  Shiny.setInputValue('account_clicked', acct, {priority: 'event'});",
-      "});"
+# Make the Account column clickable; we keep a clean label but add a data-id
+df <- df |>
+  mutate(
+    account_link = sprintf(
+      '<a href="#" class="acct-link" data-acct="%s">%s</a>',
+      htmlEscape(account), htmlEscape(account)
     )
+  ) |>
+  # put the clickable account first, then the rest (drop original 'account' to avoid dup)
+  relocate(account_link, .before = everything()) |>
+  select(-account) |>
+  rename(account = account_link)
+
+# NEW: pretty display labels for the table headers
+col_labs <- pretty_labels(names(df))
+
+DT::datatable(
+  df,
+  colnames = col_labs,
+  escape = FALSE,                # allow HTML for the link
+  rownames = FALSE,
+  options = list(pageLength = 10, scrollX = TRUE),
+  callback = JS(
+    "table.on('click', 'a.acct-link', function(e){",
+    "  e.preventDefault();",
+    "  var acct = this.getAttribute('data-acct');",
+    "  Shiny.setInputValue('account_clicked', acct, {priority: 'event'});",
+    "});"
   )
+)
+
 }, server = FALSE)
 
 # When a user clicks an account, show a modal with all fields/values for that row
