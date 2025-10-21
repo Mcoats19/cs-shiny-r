@@ -231,6 +231,10 @@ df <- df |>
   select(-account) |>
   rename(account = account_link)
 
+  # Drop redundant 'account_name' if present (avoid errors when it's not)
+df <- dplyr::select(df, -dplyr::any_of("account_name"))
+
+
 # NEW: pretty display labels for the table headers
 col_labs <- pretty_labels(names(df))
 
