@@ -254,14 +254,30 @@ observeEvent(input$account_clicked, {
   req(input$account_clicked)
   acct <- input$account_clicked
 
-  row <- filtered() |> dplyr::filter(account == acct)
+  # Use the pre-filtered data and grab the clicked row
+  row <- filtered() |> dplyr::filter(account == acct) |> dplyr::slice(1)
   req(nrow(row) == 1)
 
-  # build a neat key/value table
-  kv <- lapply(names(row), function(nm) {
-    val <- as.character(row[[nm]][1])
+  nms    <- names(row)
+  labels <- pretty_labels(nms)   # <-- Title Case, keeps AE/ARR, removes underscores
+
+  # Build key/value rows with friendly labels
+  kv <- lapply(seq_along(nms), function(i) {
+    nm <- nms[i]
+    lab <- labels[i]
+    val <- row[[nm]][1]
+
+    # light formatting
+    if (inherits(val, "Date")) {
+      val <- format(val, "%Y-%m-%d")
+    } else if (is.logical(val)) {
+      val <- if (isTRUE(val)) "TRUE" else if (isFALSE(val)) "FALSE" else ""
+    } else {
+      val <- ifelse(is.na(val), "", as.character(val))
+    }
+
     htmltools::tags$tr(
-      htmltools::tags$th(style = "white-space: nowrap; padding-right:12px;", nm),
+      htmltools::tags$th(style = "white-space: nowrap; padding-right:12px;", lab),
       htmltools::tags$td(style = "word-break: break-word;", val)
     )
   })
@@ -277,7 +293,7 @@ observeEvent(input$account_clicked, {
     )
   ))
 })
-  }
+
 
 
 # -----------------------------
