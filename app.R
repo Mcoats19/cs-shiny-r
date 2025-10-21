@@ -13,6 +13,14 @@ library(scales)
 library(DT)
 library(htmltools)
 
+# ---- Chart palettes to match the example ----
+risk_levels <- c("None","Low","Medium","High","Critical")
+risk_pal    <- viridisLite::viridis(length(risk_levels), direction = -1)
+names(risk_pal) <- risk_levels
+
+# Line colors: Total ARR (teal) + At-Risk ARR (gold)
+line_pal <- c("Total ARR" = "#2CB1BC", "At-Risk ARR" = "#F2A900")
+
 # Pretty display labels for column headers (Title Case + keep acronyms)
 pretty_labels <- function(nms) {
   lab <- gsub("_", " ", nms)
@@ -26,8 +34,7 @@ pretty_labels <- function(nms) {
 # Stop using the demo data
 # source("setup.R")
 
-# Set the default theme for ggplot2 plots
-ggplot2::theme_set(ggplot2::theme_minimal())
+
 
 # Apply the CSS used by the Shiny app to the ggplot2 plots
 thematic_shiny()
@@ -157,37 +164,30 @@ server <- function(input, output, session) {
       arrange(quarter)
   })
 
-# --- Line: Renewal ARR by Quarter (clean grid) ---
+# --- Line: Renewal ARR by Quarter (dark panel + fixed colors) ---
 output$line <- renderPlot({
   ggplot(line_df(), aes(x = quarter, y = value, color = metric, group = metric)) +
-    geom_line(linewidth = 1) +
+    geom_line(linewidth = 1.2) +
     geom_point(size = 2) +
-    scale_y_continuous(
-      labels = scales::dollar,
-      breaks = scales::breaks_pretty(5)   # ~5 horizontal grid lines
-    ) +
-    # show fewer x labels; dodge if crowded
+    scale_color_manual(values = line_pal) +                  # fixed teal/gold
+    scale_y_continuous(labels = scales::dollar,
+                       breaks = scales::breaks_pretty(5)) +
     scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
     labs(x = NULL, y = "ARR $", color = NULL, title = NULL) +
-    theme_minimal(base_size = 12) +
-    theme(
-      panel.grid.minor = element_blank(),     # remove minor grid
-      panel.grid.major.x = element_blank(),   # no vertical grid lines
+    theme(                                                  # no theme_minimal()
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank(),
       axis.ticks.x = element_blank(),
       plot.title = element_text(face = "bold")
     )
 })
 
-# --- Bar: ARR Risk by Quarter (self-contained) ---
+# --- Bar: ARR Risk by Quarter (dark panel + viridis risk palette) ---
 output$bar <- renderPlot({
   df <- filtered() %>%
     filter(!is.na(quarter)) %>%
     mutate(
-      bucket = factor(
-        as.character(risk),
-        levels = c("None","Low","Medium","High","Critical"),
-        ordered = TRUE
-      )
+      bucket = factor(as.character(risk), levels = risk_levels, ordered = TRUE)
     ) %>%
     group_by(quarter, bucket) %>%
     summarise(arr = sum(arr, na.rm = TRUE), .groups = "drop") %>%
@@ -197,18 +197,20 @@ output$bar <- renderPlot({
   validate(need(nrow(df) > 0, "No data for current filters"))
 
   ggplot(df, aes(x = quarter, y = arr, fill = bucket)) +
-    geom_col() +  # change to geom_col(position = "dodge") for side-by-side bars
+    geom_col() +                                             # stacked (keep)
+    scale_fill_manual(values = risk_pal,
+                      limits = risk_levels, drop = FALSE) +  # fixed Risk colors
     scale_y_continuous(labels = scales::dollar,
                        breaks = scales::breaks_pretty(5)) +
     scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
     labs(x = NULL, y = "ARR $", fill = "Risk", title = NULL) +
-    theme_minimal(base_size = 12) +
-    theme(
+    theme(                                                  # no theme_minimal()
       panel.grid.minor = element_blank(),
       panel.grid.major.x = element_blank(),
       axis.ticks.x = element_blank()
     )
 })
+
 
 
 # Detailed Account View — clickable accounts that open a details modal
