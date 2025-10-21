@@ -257,7 +257,7 @@ tbl <- DT::datatable(
 tbl <- DT::formatCurrency(tbl, columns = "arr", currency = "$", digits = 2, interval = 3, mark = ",", dec.mark = ".")
 
 tbl
-
+}, server = FALSE)
 
 # When a user clicks an account, show a modal with all fields/values for that row
 observeEvent(input$account_clicked, {
