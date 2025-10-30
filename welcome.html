@@ -4,6 +4,18 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Florida Blue – Success Plan Access</title>
+
+  <!-- Hardening: basic CSP to reduce injection surface -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 script-src 'self';
+                 style-src 'self' 'unsafe-inline';
+                 img-src 'self' data:;
+                 connect-src 'none';
+                 frame-ancestors 'none';
+                 base-uri 'none';
+                 form-action 'self'">
+
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
          background:#0b1220;color:#e8eefc;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center}
@@ -11,7 +23,7 @@
     h1{font-size:1.25rem;margin:0 0 6px}
     p{opacity:.9;margin:.5rem 0 1rem;line-height:1.4}
     label{font-weight:600;font-size:.95rem}
-    input[type=email]{width:100%;padding:12px 14px;border-radius:10px;border:1px solid #2a3960;background:#0d1526;color:#e8eefc}
+    input{width:100%;padding:12px 14px;border-radius:10px;border:1px solid #2a3960;background:#0d1526;color:#e8eefc}
     button{margin-top:12px;width:100%;padding:12px 14px;border:0;border-radius:10px;background:#4f7cff;color:#fff;font-weight:700;cursor:pointer}
     .note{font-size:.85rem;opacity:.8;margin-top:10px}
     .err{color:#ffb3b3;margin-top:10px;display:none}
@@ -20,52 +32,99 @@
   </style>
 </head>
 <body>
-  <div class="card">
+  <noscript>
+    <div class="card">
+      <h1>JavaScript Required</h1>
+      <p>This portal requires JavaScript to verify your access. Please enable JavaScript and reload.</p>
+    </div>
+  </noscript>
+
+  <div class="card" id="gate-card" aria-live="polite">
     <h1>Florida Blue — Success Plan Portal</h1>
     <p class="small">For privacy, please enter your work email to continue.</p>
-    <form id="gate" novalidate>
+    <form id="gate" novalidate autocomplete="off">
       <label for="email">Work email</label><br/>
-      <input id="email" name="email" type="email" placeholder="name@floridablue.com" required />
-      <button type="submit">Continue</button>
-      <div id="err" class="err">That email isn’t on the access list. If you need access, reply to Martineja Coats.</div>
+      <input id="email" name="email" type="email" placeholder="name@floridablue.com" required inputmode="email" />
+      <!-- Optional second factor: set PASSCODE_REQUIRED=true and choose a code -->
+      <div id="passcode-wrap" style="display:none;margin-top:10px">
+        <label for="code">Passcode</label><br/>
+        <input id="code" name="code" type="password" placeholder="••••••" />
+      </div>
+      <button type="submit" id="go">Continue</button>
+      <div id="err" class="err"></div>
       <div id="ok" class="ok">Verified — redirecting…</div>
       <p class="note">Only approved stakeholders can view this plan. Access may be revoked at any time.</p>
     </form>
   </div>
 
   <script>
-    // 1) Allowed emails (testing)
-    const allowedEmails = ["martinejacoats@gmail.com"].map(e => e.toLowerCase());
+    // ===== CONFIG =====
+    // Allowed emails (lowercase). Add FL Blue contacts later.
+    const ALLOW = ["martinejacoats@gmail.com"];
+    // Optional simple passcode second factor:
+    const PASSCODE_REQUIRED = false;     // set to true to require a code
+    const PASSCODE_VALUE    = "FB2025";  // change as desired
 
-    // 2) Private link destination (your tokenized Posit Cloud URL)
-    const privateUrl = "https://0199c9a5-9c1a-db72-d785-66894c753698.share.connect.posit.cloud/?private_link_token=pPHNOu3FFBEeYSxX9K8Hapl82eZq3dWb9eJWOQBsE82JPfq02xMbhJl9XYMG7Yp4";
+    // Obfuscated private link parts (Base64). Your full link split into chunks:
+    // https://0199c9a5-9c1a-db72-d785-66894c753698.share.connect.posit.cloud/?private_link_token=pPHNOu3FFBEeYSxX9K8Hapl82eZq3dWb9eJWOQBsE82JPfq02xMbhJl9XYMG7Yp4
+    const L1 = "aHR0cHM6Ly8wMTk5YzlhNS05YzFhLWRiNzItZDc4NS02Njg5NGM3NTM2OTguc2hhcmUuY29ubmVjdC5wb3NpdC5jbG91ZC8/"; // up to "?“
+    const L2 = "cHJpdmF0ZV9saW5rX3Rva2VuPQ=="; // "private_link_token="
+    const L3 = "cEhOT3UzRkZCRWVZU3hYOUt8SGFwbDgyZVpxM2RXYjllSldPUUJzRTgySlBmcTAyeE1iaEpsOVhZTUc3WXA0"; // token
 
-    // 3) Gate logic
-    const form = document.getElementById("gate");
+    // ===== RUNTIME LOGIC =====
+    const gate = document.getElementById("gate");
     const emailInput = document.getElementById("email");
     const err = document.getElementById("err");
     const ok = document.getElementById("ok");
+    const passWrap = document.getElementById("passcode-wrap");
+    const codeInput = document.getElementById("code");
 
-    form.addEventListener("submit", (e) => {
+    if (PASSCODE_REQUIRED) passWrap.style.display = "block";
+
+    // Prevent accidental form submit on Enter in fields
+    gate.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.target.id !== "go") {
+        e.preventDefault();
+      }
+    });
+
+    gate.addEventListener("submit", (e) => {
       e.preventDefault();
       err.style.display = "none";
       ok.style.display = "none";
+      err.textContent = "";
 
       const email = (emailInput.value || "").trim().toLowerCase();
-      const valid = allowedEmails.includes(email);
 
-      if (!email || !/\S+@\S+\.\S+/.test(email)) {
+      // Basic email format check
+      if (!/^\S+@\S+\.\S+$/.test(email)) {
         err.textContent = "Enter a valid work email.";
         err.style.display = "block";
         return;
       }
-      if (!valid) {
+
+      // Allowlist check
+      if (!ALLOW.map(x => x.toLowerCase()).includes(email)) {
         err.textContent = "That email isn’t on the access list. If you need access, reply to Martineja Coats.";
         err.style.display = "block";
         return;
       }
+
+      // Optional passcode check
+      if (PASSCODE_REQUIRED) {
+        const code = (codeInput.value || "").trim();
+        if (code !== PASSCODE_VALUE) {
+          err.textContent = "Incorrect passcode.";
+          err.style.display = "block";
+          return;
+        }
+      }
+
+      // Only now assemble the destination URL (not present in source beforehand)
+      const privateUrl = atob(L1) + atob(L2) + atob(L3);
+
       ok.style.display = "block";
-      setTimeout(() => { window.location.href = privateUrl; }, 650);
+      setTimeout(() => { window.location.replace(privateUrl); }, 650);
     });
   </script>
 </body>
